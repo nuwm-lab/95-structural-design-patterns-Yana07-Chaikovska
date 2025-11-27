@@ -1,146 +1,135 @@
 using System;
-using System.IO;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
-// ===== 1. Єдиний інтерфейс =====
-public interface IFileReader
+namespace SocialMediaAdapterDemo
 {
-    string ReadFile(string path);
-}
-
-// ===== 2. Специфічні класи (імітація сторонніх API) =====
-
-// TXT Reader (не можна змінювати)
-public class TxtReader
-{
-    public string LoadTxt(string path)
+    // ===== 1. Єдиний клієнтський інтерфейс =====
+    public interface ISocialMediaClient
     {
-        return File.ReadAllText(path);
-    }
-}
-
-// CSV Reader (не можна змінювати)
-public class CsvReader
-{
-    public string[] LoadCsv(string path)
-    {
-        return File.ReadAllLines(path);
-    }
-}
-
-// JSON Reader (не можна змінювати)
-public class JsonReader
-{
-    public JToken LoadJson(string path)
-    {
-        string json = File.ReadAllText(path);
-        return JToken.Parse(json); // типізовано, не dynamic
-    }
-}
-
-// ===== 3. Адаптери з інжекцією залежностей =====
-
-public class TxtReaderAdapter : IFileReader
-{
-    private readonly TxtReader txtReader;
-
-    public TxtReaderAdapter(TxtReader reader)
-    {
-        txtReader = reader;
+        void Publish(string message);
     }
 
-    public string ReadFile(string path)
+    // ===== 2. Сторонні API соцмереж (імітація, не можна змінювати) =====
+
+    // Facebook API
+    public class FacebookApi
     {
-        ValidateFile(path);
-        return txtReader.LoadTxt(path);
-    }
-
-    private void ValidateFile(string path)
-    {
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"TXT file not found: {path}");
-    }
-}
-
-public class CsvReaderAdapter : IFileReader
-{
-    private readonly CsvReader csvReader;
-
-    public CsvReaderAdapter(CsvReader reader)
-    {
-        csvReader = reader;
-    }
-
-    public string ReadFile(string path)
-    {
-        ValidateFile(path);
-        var lines = csvReader.LoadCsv(path);
-        return string.Join("\n", lines);
-    }
-
-    private void ValidateFile(string path)
-    {
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"CSV file not found: {path}");
-    }
-}
-
-public class JsonReaderAdapter : IFileReader
-{
-    private readonly JsonReader jsonReader;
-
-    public JsonReaderAdapter(JsonReader reader)
-    {
-        jsonReader = reader;
-    }
-
-    public string ReadFile(string path)
-    {
-        ValidateFile(path);
-
-        try
+        public void SendPost(string text)
         {
-            JToken obj = jsonReader.LoadJson(path);
-            return obj.ToString(Formatting.Indented);
-        }
-        catch (JsonException ex)
-        {
-            throw new Exception($"JSON parsing error in file {path}. Details: {ex.Message}");
+            Console.WriteLine($"[Facebook] Publishing: {text}");
         }
     }
 
-    private void ValidateFile(string path)
+    // Instagram API
+    public class InstagramApi
     {
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"JSON file not found: {path}");
-    }
-}
-
-// ===== 4. Client =====
-
-class Program
-{
-    static void Main(string[] args)
-    {
-        try
+        public void PublishStory(string text)
         {
-            IFileReader txt = new TxtReaderAdapter(new TxtReader());
-            IFileReader csv = new CsvReaderAdapter(new CsvReader());
-            IFileReader json = new JsonReaderAdapter(new JsonReader());
-
-            Console.WriteLine("=== TXT ===");
-            Console.WriteLine(txt.ReadFile("data.txt"));
-
-            Console.WriteLine("\n=== CSV ===");
-            Console.WriteLine(csv.ReadFile("data.csv"));
-
-            Console.WriteLine("\n=== JSON ===");
-            Console.WriteLine(json.ReadFile("data.json"));
+            Console.WriteLine($"[Instagram] Story posted: {text}");
         }
-        catch (Exception ex)
+    }
+
+    // Twitter API
+    public class TwitterApi
+    {
+        public void Tweet(string text)
         {
-            Console.WriteLine($"Error: {ex.Message}");
+            Console.WriteLine($"[Twitter] Tweeted: {text}");
+        }
+    }
+
+    // ===== 3. Адаптери (з інжекцією залежностей) =====
+
+    public class FacebookAdapter : ISocialMediaClient
+    {
+        private readonly FacebookApi facebookApi;
+
+        public FacebookAdapter(FacebookApi api)
+        {
+            facebookApi = api ?? throw new ArgumentNullException(nameof(api));
+        }
+
+        public void Publish(string message)
+        {
+            Validate(message);
+            facebookApi.SendPost(message);
+        }
+
+        private void Validate(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                throw new ArgumentException("Message cannot be empty.");
+        }
+    }
+
+    public class InstagramAdapter : ISocialMediaClient
+    {
+        private readonly InstagramApi instagramApi;
+
+        public InstagramAdapter(InstagramApi api)
+        {
+            instagramApi = api ?? throw new ArgumentNullException(nameof(api));
+        }
+
+        public void Publish(string message)
+        {
+            Validate(message);
+            instagramApi.PublishStory(message);
+        }
+
+        private void Validate(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                throw new ArgumentException("Message cannot be empty.");
+        }
+    }
+
+    public class TwitterAdapter : ISocialMediaClient
+    {
+        private readonly TwitterApi twitterApi;
+
+        public TwitterAdapter(TwitterApi api)
+        {
+            twitterApi = api ?? throw new ArgumentNullException(nameof(api));
+        }
+
+        public void Publish(string message)
+        {
+            Validate(message);
+            twitterApi.Tweet(message);
+        }
+
+        private void Validate(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                throw new ArgumentException("Message cannot be empty.");
+        }
+    }
+
+    // ===== 4. Client =====
+
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            try
+            {
+                ISocialMediaClient facebook = new FacebookAdapter(new FacebookApi());
+                ISocialMediaClient instagram = new InstagramAdapter(new InstagramApi());
+                ISocialMediaClient twitter = new TwitterAdapter(new TwitterApi());
+
+                Console.WriteLine("=== Publishing to Facebook ===");
+                facebook.Publish("Hello from Adapter Pattern!");
+
+                Console.WriteLine("\n=== Publishing to Instagram ===");
+                instagram.Publish("Adapter Pattern Story!");
+
+                Console.WriteLine("\n=== Publishing to Twitter ===");
+                twitter.Publish("Adapter pattern works!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+            }
         }
     }
 }
