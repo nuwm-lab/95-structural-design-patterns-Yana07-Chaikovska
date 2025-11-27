@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 // ===== 1. Єдиний інтерфейс =====
 public interface IFileReader
@@ -8,9 +9,9 @@ public interface IFileReader
     string ReadFile(string path);
 }
 
-// ===== 2. Специфічні класи =====
+// ===== 2. Специфічні класи (імітація сторонніх API) =====
 
-// TXT reader
+// TXT Reader (не можна змінювати)
 public class TxtReader
 {
     public string LoadTxt(string path)
@@ -19,7 +20,7 @@ public class TxtReader
     }
 }
 
-// CSV reader
+// CSV Reader (не можна змінювати)
 public class CsvReader
 {
     public string[] LoadCsv(string path)
@@ -28,50 +29,91 @@ public class CsvReader
     }
 }
 
-// JSON reader
+// JSON Reader (не можна змінювати)
 public class JsonReader
 {
-    public dynamic LoadJson(string path)
+    public JToken LoadJson(string path)
     {
-        var json = File.ReadAllText(path);
-        return JsonConvert.DeserializeObject(json);
+        string json = File.ReadAllText(path);
+        return JToken.Parse(json); // типізовано, не dynamic
     }
 }
 
-// ===== 3. Адаптери =====
+// ===== 3. Адаптери з інжекцією залежностей =====
 
-// TXT adapter
 public class TxtReaderAdapter : IFileReader
 {
-    private readonly TxtReader _txtReader = new TxtReader();
+    private readonly TxtReader txtReader;
+
+    public TxtReaderAdapter(TxtReader reader)
+    {
+        txtReader = reader;
+    }
 
     public string ReadFile(string path)
     {
-        return _txtReader.LoadTxt(path);
+        ValidateFile(path);
+        return txtReader.LoadTxt(path);
+    }
+
+    private void ValidateFile(string path)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"TXT file not found: {path}");
     }
 }
 
-// CSV adapter
 public class CsvReaderAdapter : IFileReader
 {
-    private readonly CsvReader _csvReader = new CsvReader();
+    private readonly CsvReader csvReader;
+
+    public CsvReaderAdapter(CsvReader reader)
+    {
+        csvReader = reader;
+    }
 
     public string ReadFile(string path)
     {
-        var lines = _csvReader.LoadCsv(path);
+        ValidateFile(path);
+        var lines = csvReader.LoadCsv(path);
         return string.Join("\n", lines);
+    }
+
+    private void ValidateFile(string path)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"CSV file not found: {path}");
     }
 }
 
-// JSON adapter
 public class JsonReaderAdapter : IFileReader
 {
-    private readonly JsonReader _jsonReader = new JsonReader();
+    private readonly JsonReader jsonReader;
+
+    public JsonReaderAdapter(JsonReader reader)
+    {
+        jsonReader = reader;
+    }
 
     public string ReadFile(string path)
     {
-        var obj = _jsonReader.LoadJson(path);
-        return JsonConvert.SerializeObject(obj, Formatting.Indented);
+        ValidateFile(path);
+
+        try
+        {
+            JToken obj = jsonReader.LoadJson(path);
+            return obj.ToString(Formatting.Indented);
+        }
+        catch (JsonException ex)
+        {
+            throw new Exception($"JSON parsing error in file {path}. Details: {ex.Message}");
+        }
+    }
+
+    private void ValidateFile(string path)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"JSON file not found: {path}");
     }
 }
 
@@ -81,17 +123,24 @@ class Program
 {
     static void Main(string[] args)
     {
-        IFileReader txt = new TxtReaderAdapter();
-        IFileReader csv = new CsvReaderAdapter();
-        IFileReader json = new JsonReaderAdapter();
+        try
+        {
+            IFileReader txt = new TxtReaderAdapter(new TxtReader());
+            IFileReader csv = new CsvReaderAdapter(new CsvReader());
+            IFileReader json = new JsonReaderAdapter(new JsonReader());
 
-        Console.WriteLine("=== TXT FILE ===");
-        Console.WriteLine(txt.ReadFile("data.txt"));
+            Console.WriteLine("=== TXT ===");
+            Console.WriteLine(txt.ReadFile("data.txt"));
 
-        Console.WriteLine("\n=== CSV FILE ===");
-        Console.WriteLine(csv.ReadFile("data.csv"));
+            Console.WriteLine("\n=== CSV ===");
+            Console.WriteLine(csv.ReadFile("data.csv"));
 
-        Console.WriteLine("\n=== JSON FILE ===");
-        Console.WriteLine(json.ReadFile("data.json"));
+            Console.WriteLine("\n=== JSON ===");
+            Console.WriteLine(json.ReadFile("data.json"));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
     }
 }
