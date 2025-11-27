@@ -1,136 +1,135 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text.Json;
 
-// -------------------------
-// 1. Target Interface
-// -------------------------
-public interface IFileReader
+namespace SocialMediaAdapterDemo
 {
-    List<string> Read(string filePath);
-}
-
-// -------------------------
-// 2. Existing classes (Adaptees)
-// -------------------------
-public class TxtReader
-{
-    public List<string> LoadTxt(string path)
+    // ===== 1. Єдиний клієнтський інтерфейс =====
+    public interface ISocialMediaClient
     {
-        return File.ReadAllLines(path).ToList();
-    }
-}
-
-public class CsvReader
-{
-    public List<string[]> LoadCsv(string path)
-    {
-        return File.ReadAllLines(path)
-                   .Select(line => line.Split(','))
-                   .ToList();
-    }
-}
-
-public class JsonReader
-{
-    public List<string> LoadJson(string path)
-    {
-        string json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<List<string>>(json);
-    }
-}
-
-// -------------------------
-// 3. Adapters
-// -------------------------
-
-public class TxtReaderAdapter : IFileReader
-{
-    private readonly TxtReader _txtReader = new TxtReader();
-
-    public List<string> Read(string filePath)
-    {
-        return _txtReader.LoadTxt(filePath);
-    }
-}
-
-public class CsvReaderAdapter : IFileReader
-{
-    private readonly CsvReader _csvReader = new CsvReader();
-
-    public List<string> Read(string filePath)
-    {
-        var rows = _csvReader.LoadCsv(filePath);
-        return rows.Select(r => string.Join(", ", r)).ToList();
-    }
-}
-
-public class JsonReaderAdapter : IFileReader
-{
-    private readonly JsonReader _jsonReader = new JsonReader();
-
-    public List<string> Read(string filePath)
-    {
-        return _jsonReader.LoadJson(filePath);
-    }
-}
-
-// -------------------------
-// 4. Client
-// -------------------------
-
-public class FileProcessor
-{
-    private readonly IFileReader _reader;
-
-    public FileProcessor(IFileReader reader)
-    {
-        _reader = reader;
+        void Publish(string message);
     }
 
-    public void PrintFile(string filePath)
+    // ===== 2. Сторонні API соцмереж (імітація, не можна змінювати) =====
+
+    // Facebook API
+    public class FacebookApi
     {
-        Console.WriteLine($"=== Reading: {Path.GetFileName(filePath)} ===");
-        Console.WriteLine();
-
-        var lines = _reader.Read(filePath);
-
-        foreach (var line in lines)
+        public void SendPost(string text)
         {
-            Console.WriteLine(line);
+            Console.WriteLine($"[Facebook] Publishing: {text}");
+        }
+    }
+
+    // Instagram API
+    public class InstagramApi
+    {
+        public void PublishStory(string text)
+        {
+            Console.WriteLine($"[Instagram] Story posted: {text}");
+        }
+    }
+
+    // Twitter API
+    public class TwitterApi
+    {
+        public void Tweet(string text)
+        {
+            Console.WriteLine($"[Twitter] Tweeted: {text}");
+        }
+    }
+
+    // ===== 3. Адаптери (з інжекцією залежностей) =====
+
+    public class FacebookAdapter : ISocialMediaClient
+    {
+        private readonly FacebookApi facebookApi;
+
+        public FacebookAdapter(FacebookApi api)
+        {
+            facebookApi = api ?? throw new ArgumentNullException(nameof(api));
         }
 
-        Console.WriteLine("\n--------------------------------------\n");
+        public void Publish(string message)
+        {
+            Validate(message);
+            facebookApi.SendPost(message);
+        }
+
+        private void Validate(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                throw new ArgumentException("Message cannot be empty.");
+        }
     }
-}
 
-// -------------------------
-// 5. Demo / Main
-// -------------------------
-
-public class Program
-{
-    public static void Main()
+    public class InstagramAdapter : ISocialMediaClient
     {
-        Console.WriteLine("Demo: Adapter Pattern (TXT, CSV, JSON)\n");
+        private readonly InstagramApi instagramApi;
 
-        // !!! Вкажи свої файли тут !!!
-        string txtFile = "data.txt";
-        string csvFile = "data.csv";
-        string jsonFile = "data.json";
+        public InstagramAdapter(InstagramApi api)
+        {
+            instagramApi = api ?? throw new ArgumentNullException(nameof(api));
+        }
 
-        // TXT
-        IFileReader txtReader = new TxtReaderAdapter();
-        new FileProcessor(txtReader).PrintFile(txtFile);
+        public void Publish(string message)
+        {
+            Validate(message);
+            instagramApi.PublishStory(message);
+        }
 
-        // CSV
-        IFileReader csvReader = new CsvReaderAdapter();
-        new FileProcessor(csvReader).PrintFile(csvFile);
+        private void Validate(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                throw new ArgumentException("Message cannot be empty.");
+        }
+    }
 
-        // JSON
-        IFileReader jsonReader = new JsonReaderAdapter();
-        new FileProcessor(jsonReader).PrintFile(jsonFile);
+    public class TwitterAdapter : ISocialMediaClient
+    {
+        private readonly TwitterApi twitterApi;
+
+        public TwitterAdapter(TwitterApi api)
+        {
+            twitterApi = api ?? throw new ArgumentNullException(nameof(api));
+        }
+
+        public void Publish(string message)
+        {
+            Validate(message);
+            twitterApi.Tweet(message);
+        }
+
+        private void Validate(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                throw new ArgumentException("Message cannot be empty.");
+        }
+    }
+
+    // ===== 4. Client =====
+
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            try
+            {
+                ISocialMediaClient facebook = new FacebookAdapter(new FacebookApi());
+                ISocialMediaClient instagram = new InstagramAdapter(new InstagramApi());
+                ISocialMediaClient twitter = new TwitterAdapter(new TwitterApi());
+
+                Console.WriteLine("=== Publishing to Facebook ===");
+                facebook.Publish("Hello from Adapter Pattern!");
+
+                Console.WriteLine("\n=== Publishing to Instagram ===");
+                instagram.Publish("Adapter Pattern Story!");
+
+                Console.WriteLine("\n=== Publishing to Twitter ===");
+                twitter.Publish("Adapter pattern works!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+            }
+        }
     }
 }
